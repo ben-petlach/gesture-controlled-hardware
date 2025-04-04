@@ -3,12 +3,9 @@ import org.firmata4j.firmata.FirmataDevice;
 
 import java.io.IOException;
 
-public class BuzzerController {
-    // PWM range for buzzer sound level (or intensity)
+public class BuzzerController extends DeviceController {
     public static final int MIN_SOUND = 0;
     public static final int MAX_SOUND = 255;
-
-    private Pin buzzerPin;
 
     /**
      * Constructor that initializes the buzzer on the specified PWM pin.
@@ -17,8 +14,7 @@ public class BuzzerController {
      * @param pinNumber The digital pin number the buzzer is connected to.
      */
     public BuzzerController(FirmataDevice board, int pinNumber) throws IOException {
-        buzzerPin = board.getPin(pinNumber);
-        buzzerPin.setMode(Pin.Mode.PWM);
+        super(board, pinNumber, Pin.Mode.PWM, MIN_SOUND, MAX_SOUND);
     }
 
     /**
@@ -28,10 +24,6 @@ public class BuzzerController {
      * @throws IllegalArgumentException if level is out of range.
      */
     public void setSoundLevel(int level) throws IOException {
-        if (level < MIN_SOUND || level > MAX_SOUND) {
-            throw new IllegalArgumentException("Sound level must be between "
-                    + MIN_SOUND + " and " + MAX_SOUND);
-        }
-        buzzerPin.setValue(level);
+        setValue(level);
     }
 }

@@ -1,38 +1,91 @@
-import org.firmata4j.firmata.FirmataDevice;import org.firmata4j.IODevice;
-import org.firmata4j.Pin;
+import org.firmata4j.firmata.FirmataDevice;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+/**
+ * Manages multiple device controllers.
+ * Provides centralized access to control multiple Arduino devices.
+ */
 public class DeviceManager {
-    public static void main(String[] args) {
-        try {
-            // Change the port name to match your system
-            // For Windows, it might be "COM3", for Linux/Mac something like "/dev/ttyUSB0"
-            String port = "/dev/cu.usbserial-0001";
-            IODevice board = new FirmataDevice(port);
+    private final List<DeviceController> controllers;
+    private final FirmataDevice board;
 
-            board.start();
-            board.ensureInitializationIsDone();
-
-            // Set pin D9 to SERVO mode
-            Pin servo = board.getPin(9);
-            servo.setMode(Pin.Mode.SERVO);
-
-            // Sweep servo from 0 to 180 degrees
-            for (int angle = 0; angle <= 180; angle += 10) {
-                System.out.println("Moving to angle: " + angle);
-                servo.setValue(angle);
-                Thread.sleep(100);  // wait 100ms for the servo to reach the position
-            }
-
-            // Sweep servo back from 180 to 0 degrees
-            for (int angle = 180; angle >= 0; angle -= 10) {
-                System.out.println("Moving to angle: " + angle);
-                servo.setValue(angle);
-                Thread.sleep(100);
-            }
-
-            board.stop();
-        } catch (Exception e) {
-            e.printStackTrace();
+    /**
+     * Constructor that initializes the DeviceManager with a board instance.
+     * 
+     * @param board The Firmata board that all devices are connected to
+     */
+    public DeviceManager(FirmataDevice board) {
+        this.controllers = new ArrayList<>();
+        this.board = board;
+    }
+    
+    /**
+     * Constructor that initializes the DeviceManager with a board instance and
+     * an array of pre-configured device controllers.
+     * 
+     * @param board The Firmata board
+     * @param controllers Array of preconfigured device controllers
+     */
+    public DeviceManager(FirmataDevice board, DeviceController[] controllers) {
+        this.controllers = new ArrayList<>(Arrays.asList(controllers));
+        this.board = board;
+    }
+    
+    /**
+     * Adds a device controller to be managed.
+     * 
+     * @param controller The device controller to add
+     */
+    public void addController(DeviceController controller) {
+        controllers.add(controller);
+    }
+    
+    /**
+     * Gets a device controller at the specified index.
+     * 
+     * @param index The index of the controller to retrieve
+     * @return The DeviceController at the specified index
+     * @throws IndexOutOfBoundsException if the index is out of range
+     */
+    public DeviceController getController(int index) {
+        if (index < 0 || index >= controllers.size()) {
+            throw new IndexOutOfBoundsException("Controller index out of range: " + index);
         }
+        return controllers.get(index);
+    }
+    
+    /**
+     * Controls a specific device by setting its value.
+     * 
+     * @param index The index of the controller to set
+     * @param value The value to set
+     * @throws IOException If an I/O error occurs during communication with the device
+     * @throws IndexOutOfBoundsException if the index is out of range
+     */
+    public void controlDevice(int index, int value) throws IOException {
+        DeviceController controller = getController(index);
+        controller.setValue(value);
+    }
+    
+    /**
+     * Returns the number of controllers being managed.
+     * 
+     * @return The number of controllers
+     */
+    public int getControllerCount() {
+        return controllers.size();
+    }
+    
+    /**
+     * Gets the board instance this manager is using.
+     * 
+     * @return The FirmataDevice board
+     */
+    public FirmataDevice getBoard() {
+        return board;
     }
 }

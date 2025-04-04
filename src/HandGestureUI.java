@@ -146,4 +146,28 @@ public class HandGestureUI {
                 brightnessTextColor,
                 TEXT_THICKNESS);
     }
+
+    /**
+     * Displays text on the given frame at the specified position.
+     * 
+     * @param frame The frame to display text on
+     * @param text The text to display
+     * @param position The position (x,y) to display the text
+     * @param color The color of the text
+     * @param scale The scale factor for the text size
+     */
+    public void displayText(Mat frame, String text, Point position, Scalar color, double scale) {
+        // Use OpenCV's putText method to draw text on the frame
+        // Parameters: image, text, position, font face, font scale, color, thickness, line type
+        Imgproc.putText(
+            frame,                          // Matrix to write on
+            text,                           // Text to write
+            position,                       // Position (x,y)
+            Imgproc.FONT_HERSHEY_SIMPLEX,   // Font face
+            scale,                          // Font scale
+            color,                          // Color (BGR format)
+            2,                              // Thickness
+            Imgproc.LINE_AA                 // Line type
+        );
+    }
 }

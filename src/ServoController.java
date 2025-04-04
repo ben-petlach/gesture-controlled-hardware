@@ -3,11 +3,9 @@ import org.firmata4j.firmata.FirmataDevice;
 
 import java.io.IOException;
 
-public class ServoController {
+public class ServoController extends DeviceController {
     public static final int MIN_ANGLE = 0;
     public static final int MAX_ANGLE = 180;
-
-    private Pin servoPin;
 
     /**
      * Constructor that initializes the servo on the specified pin.
@@ -16,8 +14,7 @@ public class ServoController {
      * @param pinNumber The digital pin number the servo is connected to.
      */
     public ServoController(FirmataDevice board, int pinNumber) throws IOException {
-        servoPin = board.getPin(pinNumber);
-        servoPin.setMode(Pin.Mode.SERVO);
+        super(board, pinNumber, Pin.Mode.SERVO, MIN_ANGLE, MAX_ANGLE);
     }
 
     /**
@@ -27,9 +24,6 @@ public class ServoController {
      * @throws IllegalArgumentException if the angle is out of range.
      */
     public void setAngle(int angle) throws IOException {
-        if (angle < 0 || angle > 180) {
-            throw new IllegalArgumentException("Angle must be between 0 and 180 degrees.");
-        }
-        servoPin.setValue(angle);
+        setValue(angle);
     }
 }
