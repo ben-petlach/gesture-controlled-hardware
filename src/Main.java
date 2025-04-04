@@ -1,16 +1,30 @@
 import org.opencv.core.*;
-import org.opencv.imgproc.Imgproc;
+import org.firmata4j.firmata.*;
+
+import java.io.IOException;
 
 public class Main {
+    /** The serial port identifier for the Arduino connection */
+    private static final String PORT = "/dev/cu.usbserial-0001";
+
     // Application state
     private static int mode = 0; // 0: idle, 1: finger counting, 2: distance measurement
+    private static LEDController led; // LED instance
 
-    public static void main(String[] args) {
-        // Initialize the camera manager with a window name
+    public static void main(String[] args) throws IOException, InterruptedException {
+        // Initialize software components
         CameraManager cameraManager = new CameraManager("Hand Gesture Recognition");
-
-        // Create the gesture reader
         GestureReader gestureReader = new GestureReader();
+        HandGestureUI ui = new HandGestureUI();
+
+        // Initialize Arduino Board
+        FirmataDevice arduino = new FirmataDevice(PORT);
+        arduino.start();
+        arduino.ensureInitializationIsDone();
+
+        // Initialize LED on pin 5 (PWM pin)
+        led = new LEDController(arduino, 3);
+        System.out.println("Arduino and LED initialized");
 
         Mat frame = new Mat();
         while (true) {
@@ -19,10 +33,10 @@ public class Main {
                 frame = cameraManager.readFrame();
 
                 // Draw the hand detection region
-                cameraManager.drawHandRegion(frame);
+                ui.drawHandRegion(frame, cameraManager.getHandRegion());
 
                 // Process the frame based on the current mode
-                processFrame(frame, cameraManager, gestureReader);
+                processFrame(frame, cameraManager, gestureReader, ui);
 
                 // Display the frame
                 cameraManager.showFrame(frame);
@@ -46,9 +60,17 @@ public class Main {
 
         // Release resources
         cameraManager.release();
+
+        // Turn off LED before exiting
+        try {
+            led.setBrightness(LEDController.MIN_BRIGHTNESS);
+        } catch (IOException e) {
+            System.err.println("Error turning off LED: " + e.getMessage());
+        }
     }
 
-    private static void processFrame(Mat frame, CameraManager cameraManager, GestureReader gestureReader) {
+    private static void processFrame(Mat frame, CameraManager cameraManager,
+                                     GestureReader gestureReader, HandGestureUI ui) {
         // Extract the region of interest
         Rect handRegion = cameraManager.getHandRegion();
         Mat roiMat = new Mat(frame, handRegion);
@@ -56,28 +78,48 @@ public class Main {
         // Create skin mask
         Mat skinMask = gestureReader.createSkinMask(roiMat);
 
-        // Add text to display instructions
-        String instructions = "Place your hand in the yellow box";
+        // Process based on current mode
         if (mode == 1) {
             // Count fingers
             int fingerCount = gestureReader.countFingers(skinMask, roiMat);
-            Imgproc.putText(frame, "Fingers: " + fingerCount, new Point(30, 30),
-                    Imgproc.FONT_HERSHEY_SIMPLEX, 1, new Scalar(0, 255, 0), 2);
+            ui.displayFingerCount(frame, fingerCount);
         } else if (mode == 2) {
             // Measure distance as percentage
             double percentage = gestureReader.getIndexFingerHeightPercentage(skinMask, roiMat);
-            Imgproc.putText(frame, "Height: " + String.format("%.2f", percentage) + "%",
-                    new Point(30, 30), Imgproc.FONT_HERSHEY_SIMPLEX, 1, new Scalar(0, 255, 0), 2);
+            ui.displayHeightPercentage(frame, percentage);
+
+            try {
+                // Map the percentage (0-100) to LED brightness range (MIN_BRIGHTNESS-MAX_BRIGHTNESS)
+                int brightness = mapPercentageToRange(percentage, LEDController.MIN_BRIGHTNESS, LEDController.MAX_BRIGHTNESS);
+                led.setBrightness(brightness);
+
+                // Display the mapped brightness level on the UI
+                ui.displayBrightness(frame, brightness);
+            } catch (IOException e) {
+                System.err.println("Error controlling LED: " + e.getMessage());
+            }
         } else {
             // Idle mode - display instructions
-            Imgproc.putText(frame, "Press 1 for finger counting", new Point(30, 30),
-                    Imgproc.FONT_HERSHEY_SIMPLEX, 0.8, new Scalar(0, 255, 0), 2);
-            Imgproc.putText(frame, "Press 2 for finger distance", new Point(30, 60),
-                    Imgproc.FONT_HERSHEY_SIMPLEX, 0.8, new Scalar(0, 255, 0), 2);
+            ui.displayModeInstructions(frame);
         }
 
         // Display instructions to place hand
-        Imgproc.putText(frame, instructions, new Point(30, frame.rows() - 20),
-                Imgproc.FONT_HERSHEY_SIMPLEX, 0.7, new Scalar(0, 255, 255), 2);
+        ui.displayHandPlacementInstructions(frame);
+    }
+
+    /**
+     * Maps a percentage value (0-100) to a value between minOutput and maxOutput
+     *
+     * @param percentage The input percentage (0-100)
+     * @param minOutput The minimum value of the output range
+     * @param maxOutput The maximum value of the output range
+     * @return The mapped value as an integer
+     */
+    private static int mapPercentageToRange(double percentage, int minOutput, int maxOutput) {
+        // Ensure percentage is within 0-100 range
+        percentage = Math.max(0, Math.min(100, percentage));
+
+        // Map percentage to the specified range
+        return (int)Math.round(minOutput + (percentage / 100.0) * (maxOutput - minOutput));
     }
 }
