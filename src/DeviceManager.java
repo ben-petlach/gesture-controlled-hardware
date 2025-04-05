@@ -59,6 +59,17 @@ public class DeviceManager {
     }
     
     /**
+     * Gets the name of a device controller at the specified index.
+     * 
+     * @param index The index of the controller to retrieve the name for
+     * @return The name of the device controller at the specified index
+     * @throws IndexOutOfBoundsException if the index is out of range
+     */
+    public String getDeviceName(int index) {
+        return getController(index).getDeviceName();
+    }
+    
+    /**
      * Controls a specific device by setting its value.
      * 
      * @param index The index of the controller to set
