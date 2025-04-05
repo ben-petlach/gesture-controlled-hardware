@@ -3,18 +3,22 @@ import org.firmata4j.firmata.FirmataDevice;
 
 import java.io.IOException;
 
+/**
+ * Controller for an LED component.
+ */
 public class LEDController extends DeviceController {
     public static final int MIN_BRIGHTNESS = 0;
     public static final int MAX_BRIGHTNESS = 255;
-
+    
     /**
-     * Constructor that initializes the LED on the specified PWM pin.
-     *
-     * @param board The Firmata FirmataDevice that is already started and initialized.
-     * @param pinNumber The digital pin number the LED is connected to.
+     * Creates a new LED controller.
+     * 
+     * @param board The Firmata device
+     * @param pinNumber The pin number for the LED
+     * @throws IOException If there's an error setting up the pin
      */
     public LEDController(FirmataDevice board, int pinNumber) throws IOException {
-        super(board, pinNumber, Pin.Mode.PWM, MIN_BRIGHTNESS, MAX_BRIGHTNESS);
+        super(board, pinNumber, Pin.Mode.PWM, MIN_BRIGHTNESS, MAX_BRIGHTNESS, "LED");
     }
 
     /**

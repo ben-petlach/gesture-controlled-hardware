@@ -1,3 +1,6 @@
+// Some of the text formatting and screen aligning was created with AI
+// Why: Unfamiliar with some methods involving OpenCV screen drawing
+
 import org.opencv.core.*;
 import org.opencv.imgproc.Imgproc;
 
@@ -46,27 +49,6 @@ public class HandGestureUI {
     }
     
     /**
-     * Displays mode selection instructions in idle mode
-     * 
-     * @param frame The frame to draw on
-     */
-    public void displayModeInstructions(Mat frame) {
-        Imgproc.putText(frame, "Press 1 for finger counting", 
-                PRIMARY_TEXT_POSITION,
-                Imgproc.FONT_HERSHEY_SIMPLEX, 
-                SECONDARY_TEXT_SCALE, 
-                PRIMARY_TEXT_COLOR, 
-                TEXT_THICKNESS);
-                
-        Imgproc.putText(frame, "Press 2 for finger distance", 
-                SECONDARY_TEXT_POSITION,
-                Imgproc.FONT_HERSHEY_SIMPLEX, 
-                SECONDARY_TEXT_SCALE, 
-                PRIMARY_TEXT_COLOR, 
-                TEXT_THICKNESS);
-    }
-    
-    /**
      * Displays hand placement instructions at the bottom of the frame
      * 
      * @param frame The frame to draw on
@@ -92,60 +74,6 @@ public class HandGestureUI {
     public void drawHandRegion(Mat frame, Rect region) {
         Imgproc.rectangle(frame, region, new Scalar(0, 255, 255), 2);
     }
-    
-    /**
-     * Displays the current servo angle on the frame
-     * 
-     * @param frame The frame to draw on
-     * @param angle The current servo angle
-     */
-    public void displayServoAngle(Mat frame, int angle) {
-        Point servoTextPosition = new Point(30, 90); // Position below other text
-        Scalar servoTextColor = new Scalar(255, 165, 0); // Orange color
-        
-        Imgproc.putText(frame, "Servo Angle: " + angle + "°",
-                servoTextPosition, 
-                Imgproc.FONT_HERSHEY_SIMPLEX, 
-                SECONDARY_TEXT_SCALE, 
-                servoTextColor, 
-                TEXT_THICKNESS);
-    }
-
-    /**
-     * Displays the current buzzer sound level on the frame
-     *
-     * @param frame The frame to draw on
-     * @param level The current sound level
-     */
-    public void displaySoundLevel(Mat frame, int level) {
-        Point soundTextPosition = new Point(30, 90); // Position below other text
-        Scalar soundTextColor = new Scalar(255, 0, 255); // Purple color
-
-        Imgproc.putText(frame, "Sound Level: " + level,
-                soundTextPosition,
-                Imgproc.FONT_HERSHEY_SIMPLEX,
-                SECONDARY_TEXT_SCALE,
-                soundTextColor,
-                TEXT_THICKNESS);
-    }
-
-    /**
-     * Displays the current LED brightness level on the frame
-     *
-     * @param frame The frame to draw on
-     * @param brightness The current brightness level
-     */
-    public void displayBrightness(Mat frame, int brightness) {
-        Point brightnessTextPosition = new Point(30, 90); // Position below other text
-        Scalar brightnessTextColor = new Scalar(0, 255, 255); // Cyan color
-
-        Imgproc.putText(frame, "LED Brightness: " + brightness,
-                brightnessTextPosition,
-                Imgproc.FONT_HERSHEY_SIMPLEX,
-                SECONDARY_TEXT_SCALE,
-                brightnessTextColor,
-                TEXT_THICKNESS);
-    }
 
     /**
      * Displays text on the given frame at the specified position.
@@ -169,5 +97,52 @@ public class HandGestureUI {
             2,                              // Thickness
             Imgproc.LINE_AA                 // Line type
         );
+    }
+
+    /**
+     * Displays available device options with their associated numbers
+     * 
+     * @param frame The frame to draw on
+     * @param deviceManager The device manager containing available devices
+     */
+    public void displayDeviceOptions(Mat frame, DeviceManager deviceManager) {
+        int deviceCount = deviceManager.getControllerCount();
+        
+        // Start position for the first device option
+        int yPosition = 90; // Start below other UI elements
+        
+        // Display header text
+        Imgproc.putText(frame, "Available devices:", 
+                new Point(30, yPosition),
+                Imgproc.FONT_HERSHEY_SIMPLEX, 
+                0.7, 
+                INSTRUCTION_COLOR, 
+                TEXT_THICKNESS);
+        
+        yPosition += 25; // Move down for device list
+        
+        // Display each device with its number
+        for (int i = 0; i < deviceCount; i++) {
+            String deviceName = deviceManager.getDeviceName(i);
+            String deviceInfo = (i + 1) + ": " + deviceName; // Display 1-based indexing for users
+            
+            Imgproc.putText(frame, deviceInfo, 
+                    new Point(40, yPosition), // Indented from header
+                    Imgproc.FONT_HERSHEY_SIMPLEX, 
+                    0.65, 
+                    PRIMARY_TEXT_COLOR, 
+                    1);
+            
+            yPosition += 25; // Move down for next device
+        }
+        
+        // Display instruction about how to select devices
+        yPosition += 10; // Add some extra space
+        Imgproc.putText(frame, "Show fingers to select device", 
+                new Point(30, yPosition),
+                Imgproc.FONT_HERSHEY_SIMPLEX, 
+                0.65, 
+                INSTRUCTION_COLOR, 
+                1);
     }
 }

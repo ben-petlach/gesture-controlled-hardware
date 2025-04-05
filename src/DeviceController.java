@@ -11,6 +11,7 @@ public abstract class DeviceController {
     protected Pin devicePin;
     protected final int minValue;
     protected final int maxValue;
+    protected final String deviceName;
 
     /**
      * Constructor that initializes a device on the specified pin.
@@ -20,13 +21,15 @@ public abstract class DeviceController {
      * @param mode The pin mode to set (e.g., Pin.Mode.SERVO, Pin.Mode.PWM).
      * @param minValue The minimum valid value for this device.
      * @param maxValue The maximum valid value for this device.
+     * @param deviceName The descriptive name of this device.
      */
     protected DeviceController(FirmataDevice board, int pinNumber, Pin.Mode mode, 
-                              int minValue, int maxValue) throws IOException {
+                              int minValue, int maxValue, String deviceName) throws IOException {
         this.devicePin = board.getPin(pinNumber);
         this.devicePin.setMode(mode);
         this.minValue = minValue;
         this.maxValue = maxValue;
+        this.deviceName = deviceName;
     }
 
     /**
@@ -41,5 +44,14 @@ public abstract class DeviceController {
                     + minValue + " and " + maxValue);
         }
         devicePin.setValue(value);
+    }
+    
+    /**
+     * Gets the name of this device.
+     *
+     * @return The descriptive name of the device.
+     */
+    public String getDeviceName() {
+        return deviceName;
     }
 }
