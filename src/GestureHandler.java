@@ -22,7 +22,8 @@ public class GestureHandler {
         this.currentMode = MODE_FINGER_COUNTING;
         this.gestureDetector = new GestureDetector();
     }
-    
+
+    // Logic from AI as it was extracted from OpenCV finger detection logic
     /**
      * Processes the current frame for gesture analysis.
      * 
