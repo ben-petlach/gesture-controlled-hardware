@@ -1,16 +1,45 @@
 import org.opencv.core.*;
-import org.opencv.imgproc.Imgproc;
+import org.firmata4j.firmata.*;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Main {
+    /** The serial port identifier for the Arduino connection */
+    private static final String PORT = "/dev/cu.usbserial-0001";
+
     // Application state
-    private static int mode = 0; // 0: idle, 1: finger counting, 2: distance measurement
+    private static final int MODE_FINGER_COUNTING = 1;
+    private static final int MODE_DISTANCE_MEASUREMENT = 2;
+    private static int mode = MODE_FINGER_COUNTING; // Start in finger counting mode
+    
+    // Constants for gesture recognition
+    private static final int FRAMES_TO_COLLECT = 50;
+    private static final double DETECTION_THRESHOLD = 0.8; // 80%
+    
+    // Tracking state
+    private static boolean isCollectingFrames = false;
+    private static int framesCollected = 0;
+    private static List<Integer> detectedFingers = new ArrayList<>();
+    private static int selectedDeviceIndex = -1;
 
-    public static void main(String[] args) {
-        // Initialize the camera manager with a window name
+    public static void main(String[] args) throws IOException, InterruptedException {
+        // Initialize software components
         CameraManager cameraManager = new CameraManager("Hand Gesture Recognition");
-
-        // Create the gesture reader
         GestureReader gestureReader = new GestureReader();
+        HandGestureUI ui = new HandGestureUI();
+
+        // Initialize Arduino Board
+        FirmataDevice arduino = new FirmataDevice(PORT);
+        arduino.start();
+        arduino.ensureInitializationIsDone();
+
+        // Initialize hardware
+        DeviceManager manager = new DeviceManager(arduino);
+        manager.addController(new LEDController(arduino, 3));
+        manager.addController(new ServoController(arduino, 9));
+        manager.addController(new BuzzerController(arduino, 5));
 
         Mat frame = new Mat();
         while (true) {
@@ -19,10 +48,10 @@ public class Main {
                 frame = cameraManager.readFrame();
 
                 // Draw the hand detection region
-                cameraManager.drawHandRegion(frame);
+                ui.drawHandRegion(frame, cameraManager.getHandRegion());
 
                 // Process the frame based on the current mode
-                processFrame(frame, cameraManager, gestureReader);
+                processFrame(frame, cameraManager, gestureReader, ui, manager);
 
                 // Display the frame
                 cameraManager.showFrame(frame);
@@ -32,23 +61,28 @@ public class Main {
                 if (key == 27) { // ESC key
                     break;
                 } else if (key == 49) { // '1' key
-                    mode = 1;
+                    resetDetectionState();
+                    mode = MODE_FINGER_COUNTING;
                     System.out.println("Mode: Finger Counting");
                 } else if (key == 50) { // '2' key
-                    mode = 2;
+                    mode = MODE_DISTANCE_MEASUREMENT;
                     System.out.println("Mode: Distance Measurement");
                 }
             } catch (Exception e) {
                 System.err.println("Error processing frame: " + e.getMessage());
+                e.printStackTrace();
                 break;
             }
         }
 
         // Release resources
         cameraManager.release();
+        arduino.stop();
     }
 
-    private static void processFrame(Mat frame, CameraManager cameraManager, GestureReader gestureReader) {
+    private static void processFrame(Mat frame, CameraManager cameraManager,
+                                     GestureReader gestureReader, HandGestureUI ui,
+                                     DeviceManager deviceManager) throws IOException {
         // Extract the region of interest
         Rect handRegion = cameraManager.getHandRegion();
         Mat roiMat = new Mat(frame, handRegion);
@@ -56,28 +90,156 @@ public class Main {
         // Create skin mask
         Mat skinMask = gestureReader.createSkinMask(roiMat);
 
-        // Add text to display instructions
-        String instructions = "Place your hand in the yellow box";
-        if (mode == 1) {
+        if (mode == MODE_FINGER_COUNTING) {
             // Count fingers
             int fingerCount = gestureReader.countFingers(skinMask, roiMat);
-            Imgproc.putText(frame, "Fingers: " + fingerCount, new Point(30, 30),
-                    Imgproc.FONT_HERSHEY_SIMPLEX, 1, new Scalar(0, 255, 0), 2);
-        } else if (mode == 2) {
+            ui.displayFingerCount(frame, fingerCount);
+            
+            // Handle finger detection logic
+            handleFingerDetection(frame, fingerCount, ui, deviceManager);
+            
+        } else if (mode == MODE_DISTANCE_MEASUREMENT && selectedDeviceIndex >= 0) {
             // Measure distance as percentage
             double percentage = gestureReader.getIndexFingerHeightPercentage(skinMask, roiMat);
-            Imgproc.putText(frame, "Height: " + String.format("%.2f", percentage) + "%",
-                    new Point(30, 30), Imgproc.FONT_HERSHEY_SIMPLEX, 1, new Scalar(0, 255, 0), 2);
-        } else {
-            // Idle mode - display instructions
-            Imgproc.putText(frame, "Press 1 for finger counting", new Point(30, 30),
-                    Imgproc.FONT_HERSHEY_SIMPLEX, 0.8, new Scalar(0, 255, 0), 2);
-            Imgproc.putText(frame, "Press 2 for finger distance", new Point(30, 60),
-                    Imgproc.FONT_HERSHEY_SIMPLEX, 0.8, new Scalar(0, 255, 0), 2);
+            ui.displayHeightPercentage(frame, percentage);
+            
+            // Control the selected device based on height percentage
+            controlSelectedDevice(deviceManager, percentage, frame, ui);
         }
 
-        // Display instructions to place hand
-        Imgproc.putText(frame, instructions, new Point(30, frame.rows() - 20),
-                Imgproc.FONT_HERSHEY_SIMPLEX, 0.7, new Scalar(0, 255, 255), 2);
+        // Display instructions
+        if (selectedDeviceIndex >= 0) {
+            ui.displayText(frame, "Controlling Device " + selectedDeviceIndex, new Point(10, 70), 
+                          new Scalar(0, 255, 0), 1.0);
+        } else {
+            ui.displayHandPlacementInstructions(frame);
+            ui.displayModeInstructions(frame);
+        }
+    }
+    
+    private static void handleFingerDetection(Mat frame, int fingerCount, HandGestureUI ui, 
+                                             DeviceManager deviceManager) {
+        // Only process meaningful finger counts (1-5)
+        if (fingerCount >= 1 && fingerCount <= deviceManager.getControllerCount()) {
+            if (!isCollectingFrames) {
+                // Start collecting frames for this detection
+                isCollectingFrames = true;
+                framesCollected = 0;
+                detectedFingers.clear();
+                System.out.println("Started collecting frames for finger count: " + fingerCount);
+            }
+            
+            // Add this detection to our collection
+            detectedFingers.add(fingerCount);
+            framesCollected++;
+            
+            // Display collection progress
+            ui.displayText(frame, "Collecting: " + framesCollected + "/" + FRAMES_TO_COLLECT, 
+                          new Point(10, 120), new Scalar(255, 255, 0), 1.0);
+            
+            // Check if we've collected enough frames
+            if (framesCollected >= FRAMES_TO_COLLECT) {
+                analyzeDetectedFingers(deviceManager);
+                isCollectingFrames = false;
+            }
+        } else if (isCollectingFrames) {
+            // Add zero as placeholder if no valid fingers detected
+            detectedFingers.add(0);
+            framesCollected++;
+            
+            // Check if we've collected enough frames
+            if (framesCollected >= FRAMES_TO_COLLECT) {
+                analyzeDetectedFingers(deviceManager);
+                isCollectingFrames = false;
+            }
+        }
+    }
+    
+    private static void analyzeDetectedFingers(DeviceManager deviceManager) {
+        // Count occurrences of each finger count
+        int[] counts = new int[deviceManager.getControllerCount() + 1];
+        for (int fingers : detectedFingers) {
+            if (fingers >= 1 && fingers <= deviceManager.getControllerCount()) {
+                counts[fingers]++;
+            }
+        }
+        
+        // Find the most frequent finger count that meets the threshold
+        int mostFrequent = 0;
+        int maxCount = 0;
+        for (int i = 1; i <= deviceManager.getControllerCount(); i++) {
+            if (counts[i] > maxCount) {
+                maxCount = counts[i];
+                mostFrequent = i;
+            }
+        }
+        
+        // Check if it meets our threshold
+        double detectionRate = (double) maxCount / FRAMES_TO_COLLECT;
+        if (detectionRate >= DETECTION_THRESHOLD && mostFrequent > 0) {
+            System.out.println("Detected finger count " + mostFrequent + 
+                              " with confidence " + (detectionRate * 100) + "%");
+            
+            // Switch to distance measurement mode to control this device
+            selectedDeviceIndex = mostFrequent - 1; // Convert to 0-based index
+            mode = MODE_DISTANCE_MEASUREMENT;
+            System.out.println("Switching to distance measurement for device " + selectedDeviceIndex);
+        } else {
+            System.out.println("No consistent finger count detected. Highest was " + 
+                              mostFrequent + " with " + (detectionRate * 100) + "% confidence");
+        }
+    }
+    
+    private static void controlSelectedDevice(DeviceManager deviceManager, double percentage, 
+                                             Mat frame, HandGestureUI ui) throws IOException {
+        // Ensure device index is valid
+        if (selectedDeviceIndex >= 0 && selectedDeviceIndex < deviceManager.getControllerCount()) {
+            // Map percentage to appropriate range for the device
+            DeviceController controller = deviceManager.getController(selectedDeviceIndex);
+            int minValue = 0;
+            int maxValue = 255;
+            
+            // Get device-specific ranges if possible
+            if (controller instanceof LEDController) {
+                minValue = LEDController.MIN_BRIGHTNESS;
+                maxValue = LEDController.MAX_BRIGHTNESS;
+            } else if (controller instanceof ServoController) {
+                // Assuming servo has its own range constants
+                minValue = 0;
+                maxValue = 180;
+            }
+            
+            int mappedValue = mapPercentageToRange(percentage, minValue, maxValue);
+            
+            // Control the device
+            deviceManager.controlDevice(selectedDeviceIndex, mappedValue);
+            
+            // Display the control value
+            ui.displayText(frame, "Value: " + mappedValue, new Point(10, 100), 
+                          new Scalar(255, 255, 0), 1.0);
+        }
+    }
+    
+    private static void resetDetectionState() {
+        isCollectingFrames = false;
+        framesCollected = 0;
+        detectedFingers.clear();
+        selectedDeviceIndex = -1;
+    }
+
+    /**
+     * Maps a percentage value (0-100) to a value between minOutput and maxOutput
+     *
+     * @param percentage The input percentage (0-100)
+     * @param minOutput The minimum value of the output range
+     * @param maxOutput The maximum value of the output range
+     * @return The mapped value as an integer
+     */
+    private static int mapPercentageToRange(double percentage, int minOutput, int maxOutput) {
+        // Ensure percentage is within 0-100 range
+        percentage = Math.max(0, Math.min(100, percentage));
+
+        // Map percentage to the specified range
+        return (int)Math.round(minOutput + (percentage / 100.0) * (maxOutput - minOutput));
     }
 }

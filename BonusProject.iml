@@ -22,5 +22,8 @@
         </SOURCES>
       </library>
     </orderEntry>
+    <orderEntry type="library" name="io.github.java.native.jssc" level="project" />
+    <orderEntry type="library" name="github.kurbatov.firmata4j" level="project" />
+    <orderEntry type="library" name="slf4j.jcl" level="project" />
   </component>
 </module>

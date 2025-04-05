@@ -70,8 +70,4 @@ public class CameraManager {
     public Rect getHandRegion() {
         return handRegion;
     }
-    
-    public void drawHandRegion(Mat frame) {
-        Imgproc.rectangle(frame, handRegion, new Scalar(0, 255, 255), 2);
-    }
 }
