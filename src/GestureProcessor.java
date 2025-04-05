@@ -9,7 +9,7 @@ import org.opencv.imgproc.Moments;
 import java.util.ArrayList;
 import java.util.List;
 
-public class GestureReader {
+public class GestureProcessor {
     
     /**
      * Count the number of extended fingers in the provided thresholded image.
